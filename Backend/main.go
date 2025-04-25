@@ -31,6 +31,9 @@ func main() {
 		auth.GET("/search", handlers.GetDataByQuery)
 		auth.GET("/log",handlers.GetLog)
 		auth.GET("log/:id",handlers.GetLogByID)
+		auth.GET("/stats/clicks-search",handlers.GetClicksSearch)
+		auth.POST("/log/click",handlers.PostClickLog)
+		auth.GET("/stats/link-clicks",handlers.GetLinkClicks)
 	}
 
 	r.Run(":8080")

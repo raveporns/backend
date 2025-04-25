@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"net/http"
 	"project/database"
 	"project/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -62,4 +64,73 @@ func PostLog(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Log saved"})
+}
+
+func GetClicksSearch(c *gin.Context) {
+	// นับตั้งแต่เที่ยงคืนวันนี้
+	startOfDay := time.Now().Truncate(24 * time.Hour)
+
+	var count int
+	err := database.DB.QueryRow(`
+	  SELECT COUNT(*) 
+	  FROM logs 
+	  WHERE timestamp >= $1
+	`, startOfDay).Scan(&count)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			count = 0
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"clicksSearch": count})
+}
+
+func PostClickLog(c *gin.Context) {
+    var log models.Log
+    if err := c.ShouldBindJSON(&log); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+        return
+    }
+
+    // กรณีที่เวลาไม่ได้ถูกส่งมา, จะใช้เวลาปัจจุบัน
+    if log.Time.IsZero() {
+        log.Time = time.Now().UTC()
+    }
+
+    // บันทึก log ลงในฐานข้อมูล
+    _, err := database.DB.Exec(
+        `INSERT INTO logs (client_id, endpoint, method, timestamp)
+         VALUES ($1, $2, $3, $4)`,
+        log.ClientID, log.Endpoint, log.Method, log.Time,
+    )
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not insert click log"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Click log saved"})
+}
+
+// GET /stats/link-clicks
+func GetLinkClicks(c *gin.Context) {
+    startOfDay := time.Now().Truncate(24 * time.Hour)
+
+    var count int
+    // นับเฉพาะ log ที่ endpoint เริ่มด้วย "/detail/"
+    err := database.DB.QueryRow(`
+      SELECT COUNT(*) 
+      FROM logs 
+      WHERE timestamp >= $1
+        AND endpoint LIKE '/detail/%'
+    `, startOfDay).Scan(&count)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"linkClicks": count})
 }
